@@ -1,0 +1,14 @@
+digraph finite_state_machine {
+ rankdir=LR;
+size ="8,5"
+ node [shape = box, width = 2];
+AudioOut_2_492[label= "AudioOut_2_492\n 42"];
+tel_aac_decoder_5581[label= "tel_aac_decoder_5581\n 84"];
+dequeueBuffer[label= "dequeueBuffer\n 60"];
+sdcard_206[label= "sdcard_206\n 2"];
+irq_29_intel_ss_100[label= "irq_29_intel_ss_100\n "];
+postVideoEvent_l[label= "postVideoEvent_l\n 63"];
+queueBuffer[label= "queueBuffer\n 60"];
+surfaceflinger_538[label= "surfaceflinger_538\n 119"];
+OMXCallbackDisp_5579[label= "OMXCallbackDisp_5579\n 121"];
+}
