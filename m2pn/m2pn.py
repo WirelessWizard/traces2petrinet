@@ -20,7 +20,7 @@ m_pattern = "m(" + \
             Word("01") + "," + \
             Word(nums) + ")"
 
-comment_line = Optional(Word(alphanums + ' \t')) + LineEnd().suppress()
+comment_line = Optional(Word(printables + ' \t')) + LineEnd().suppress()
 aux_pattern = OneOrMore(LineEnd()) | ("#" + comment_line)
 
 class PredicateParser:
@@ -83,25 +83,37 @@ class PredicateParser:
 
             self.applyPredicate(a, b, dir, k)
 
+   def needBuffer(self, pred, succ):
+      n = self.pnet
+      if not n.has_transition(pred) and not n.has_transition(succ):
+         return True
+      if n.has_transition(pred):
+         pred_outputs = n.transition(pred).output()
+         assert(len(pred_outputs) == 1)
+         old_succs_of_pred = n.post(str(pred_outputs[0][0]))
+         if len(old_succs_of_pred) == 0:
+            return True
+      if n.has_transition(succ):
+         succ_inputs = n.transition(succ).input()
+         assert(len(succ_inputs) == 1)
+         old_preds_of_succ = n.pre(str(succ_inputs[0][0]))
+         if len(old_preds_of_succ) == 0:
+            return True
+      return False
+
    def applyPredicate(self, left, right, dir, k):
-      if dir == True:
+      if dir:
          pred = left
          succ = right
       else:
          pred = right
          succ = left
 
-      if not self.pnet.has_transition(pred) and not self.pnet.has_transition(succ):
-         # Buffer
-         self.buildBuffer(pred, succ, dir, k)
-      elif self.pnet.has_transition(pred):
-         assert k == 1
-         self.buildBranch(pred, succ, dir)
-      elif self.pnet.has_transition(succ):
-         assert k == 1
-         self.buildBranch(succ, pred, dir)
+      if self.needBuffer(pred, succ):
+         self.buildBuffer(pred, succ, k)
       else:
-         assert False
+         assert(k == 1)
+         self.buildBranch(pred, succ)
 
    def buildPlace(self, capacity):
       pname = 'p' + str(self.place_counter)
@@ -110,19 +122,28 @@ class PredicateParser:
       self.pnet.add_place(place)
       return str(place)
 
-   def buildBranch(self, root, branch, dir):
+   def buildBranch(self, pred, succ):
       n = self.pnet
 
-      assert(n.has_transition(root))
+      if n.has_transition(pred):
+         root = pred
+         branch = succ
+      elif n.has_transition(succ):
+         root = succ
+         branch = pred
+      else:
+         assert(False)
 
-      if not self.pnet.has_transition(branch):
+      if not n.has_transition(branch):
          n.add_transition(Transition(branch))
          branch_is_new = True
       else:
          branch_is_new = False
 
-      if dir:
+      if root == pred:
          # root --> branch (choice)
+         print ' building choice'
+
          root_output = n.transition(root).output()
 
          assert(len(root_output) == 1)
@@ -135,7 +156,9 @@ class PredicateParser:
             output_place = self.buildPlace(1)
             n.add_output(output_place, branch, Value(1))
       else:
-         # root <-- branch (marge)
+         # root <-- branch (merge)
+         print ' building merge'
+
          root_input = n.transition(root).input()
 
          assert(len(root_input) == 1)
@@ -148,75 +171,63 @@ class PredicateParser:
             try : n.add_input(input_place, branch, Value(1))
             except ConstraintError : print(sys.exc_info()[1])
 
-   def buildChoice(self, pred, succ):
-      # pred -- exists
-      # succ -- new
-      if not self.pnet.has_transition(succ):
-         self.pnet.add_transition(Transition(succ))
-         succ_is_new = True
-      else:
-         succ_is_new = False
-      pred_output = self.pnet.transition(pred).output()
+   def getUniqueInput(self, tr):
+      n = self.pnet
+      inputs = n.transition(tr).input()
+      assert(len(inputs) == 1)
+      return str(inputs[0][0])
 
-      assert(len(pred_output) == 1)
+   def getUniqueOutput(self, tr):
+      n = self.pnet
+      outputs = n.transition(tr).output()
+      assert(len(outputs) == 1)
+      return str(outputs[0][0])
 
-      l_place = str(pred_output[0][0])
-      try : self.pnet.add_input(l_place, succ, Value(1))
-      except ConstraintError : print(sys.exc_info()[1])
+   def buildBuffer(self, pred, succ, k):
+      n = self.pnet
 
-      if succ_is_new:
-         r_place = self.buildPlace(1)
-         self.pnet.add_output(r_place, succ, Value(1))
+      print ' pred:%s --> succ:%s' % (pred, succ)
 
-   def buildMerge(self, pred, succ):
-      # pred -- new
-      # succ -- exists
-      if not self.pnet.has_transition(pred):
-         self.pnet.add_transition(Transition(pred))
+      if not n.has_transition(pred):
+         n.add_transition(Transition(pred))
          pred_is_new = True
       else:
          pred_is_new = False
-      succ_input = self.pnet.transition(succ).input()
 
-      assert(len(succ_input) == 1)
+      if not n.has_transition(succ):
+         n.add_transition(Transition(succ))
+         succ_is_new = True
+      else:
+         succ_is_new = False
+
+      if pred_is_new and succ_is_new:
+         l_place = self.buildPlace(k)
+         m_place = self.buildPlace(k)
+         r_place = self.buildPlace(k)
+      elif pred_is_new and not succ_is_new:
+         l_place = self.buildPlace(k)
+         m_place = self.getUniqueInput(succ)
+         r_place = self.getUniqueOutput(succ)
+      elif succ_is_new and not pred_is_new:
+         l_place = self.getUniqueInput(pred)
+         m_place = self.getUniqueOutput(pred)
+         r_place = self.buildPlace(k)
+      else:
+         print('[error] pred and succ must not both already exist in the buffer construction method!')
+         assert(False)
+
+      print('l:%s m:%s r:%s' % (l_place, m_place, r_place))
 
       if pred_is_new:
-         l_place = self.buildPlace(1)
-         try : self.pnet.add_input(l_place, pred, Value(1))
+         try : n.add_input(l_place, pred, Value(1))
          except ConstraintError : print(sys.exc_info()[1])
 
-      r_place = str(succ_input[0][0])
-      self.pnet.add_output(r_place, pred, Value(1))
-
-   def buildBuffer(self, tr_1, tr_2, dir, k):
-      n = self.pnet
-
-      if dir:
-         pred = tr_1
-         succ = tr_2
-      else:
-         pred = tr_2
-         succ = tr_1
-
-      #if not n.has_transition(pred):
-      n.add_transition(Transition(pred))
-
-      #if not n.has_transition(succ):
-      n.add_transition(Transition(succ))
-
-      l_place = self.buildPlace(k)
-      m_place = self.buildPlace(k)
-      r_place = self.buildPlace(k)
-
-      try : self.pnet.add_input(l_place, pred, Value(1))
-      except ConstraintError : print(sys.exc_info()[1])
-
       n.add_output(m_place, pred, Value(1))
-
       try : n.add_input(m_place, succ, Value(1))
       except ConstraintError : print(sys.exc_info()[1])
 
-      self.pnet.add_output(r_place, succ, Value(1))
+      if succ_is_new:
+         n.add_output(r_place, succ, Value(1))
 
 def main(argv):
    #Parse the m-predicate file
