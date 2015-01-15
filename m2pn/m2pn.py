@@ -142,7 +142,7 @@ class PredicateParser:
 
       if root == pred:
          # root --> branch (choice)
-         print ' building choice'
+         #print ' building choice'
 
          root_output = n.transition(root).output()
 
@@ -157,7 +157,7 @@ class PredicateParser:
             n.add_output(output_place, branch, Value(1))
       else:
          # root <-- branch (merge)
-         print ' building merge'
+         #print ' building merge'
 
          root_input = n.transition(root).input()
 
@@ -186,7 +186,7 @@ class PredicateParser:
    def buildBuffer(self, pred, succ, k):
       n = self.pnet
 
-      print ' pred:%s --> succ:%s' % (pred, succ)
+      #print ' pred:%s --> succ:%s' % (pred, succ)
 
       if not n.has_transition(pred):
          n.add_transition(Transition(pred))
@@ -216,7 +216,7 @@ class PredicateParser:
          print('[error] pred and succ must not both already exist in the buffer construction method!')
          assert(False)
 
-      print('l:%s m:%s r:%s' % (l_place, m_place, r_place))
+      #print('l:%s m:%s r:%s' % (l_place, m_place, r_place))
 
       if pred_is_new:
          try : n.add_input(l_place, pred, Value(1))
@@ -231,24 +231,21 @@ class PredicateParser:
 
 def main(argv):
    #Parse the m-predicate file
-   parser = argparse.ArgumentParser(description='...')
+   parser = argparse.ArgumentParser(description='Step-by-step approach to building Petrinets from m-predicate sets.')
    parser.add_argument('--input_file', '-if', help='specify an input file')
    parser.add_argument('--output_file', '-of', help='specify an output file')
    args = parser.parse_args(argv[1:])
 
+   if not args.input_file:
+      parser.error('Need to specify an m-predicate file.')
+   if not args.output_file:
+      parser.error('Need to specify a GraphViz output file.')
+
    print('Starting ' + argv[0] + ' ...')
 
    m2pn = PredicateParser(args.input_file)
-
-   if args.input_file:
-      m2pn.run()
-   else:
-      print('[error] Need to specify an m-predicate file.\n')
-
-   if args.output_file:
-      m2pn.draw(args.output_file)
-   else:
-      print('[error] Need to specify a GraphViz output file.\n')
+   m2pn.run()
+   m2pn.draw(args.output_file)
 
 if __name__ == "__main__":
    main(sys.argv)
